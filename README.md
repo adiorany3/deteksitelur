@@ -16,7 +16,10 @@ Created by: Galuh Adi Insani
 - Bandingkan hasil dari beberapa teknik secara berdampingan.
 
 ## Instalasi
-Python 3.8+ direkomendasikan.
+Python 3.8 - 3.11 direkomendasikan. (OpenCV wheel support may be limited in Python 3.12+)
+
+**Note for Streamlit Cloud / Linux hosts**: Use `opencv-python-headless` rather than `opencv-python` to avoid GUI deps and to reduce platform issues.
+
 
 1) Buat environment virtual (opsional):
 
