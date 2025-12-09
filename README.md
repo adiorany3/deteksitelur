@@ -15,6 +15,12 @@ Created by: Galuh Adi Insani
 - Simpan / load konfigurasi (JSON) untuk reproduceable results.
 - Bandingkan hasil dari beberapa teknik secara berdampingan.
 
+## Contoh Hasil Deteksi
+Berikut contoh hasil deteksi menggunakan salah satu teknik pada citra uji:
+
+![Hasil Deteksi](deteksi.png)
+
+
 ## Instalasi
 Python 3.8 - 3.11 direkomendasikan. (OpenCV wheel support may be limited in Python 3.12+)
 
