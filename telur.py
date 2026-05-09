@@ -20,7 +20,7 @@ st.write(
 def create_egg_mask(image_rgb):
     """
     Membuat mask warna telur.
-    Cocok untuk telur berwarna coklat/oranye seperti gambar contoh.
+    Cocok untuk telur coklat/oranye seperti gambar contoh.
     """
     image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
     hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
@@ -69,14 +69,14 @@ def create_egg_template(width=22, height=18):
 
 def detect_eggs_template(
     image_rgb,
-    threshold=0.30,
+    threshold=0.27,
     template_width=22,
     template_height=18,
-    peak_window=23
+    peak_window=17
 ):
     """
     Mendeteksi telur menggunakan template matching.
-    Lebih cocok untuk telur yang saling menempel dibanding contour biasa.
+    Cocok untuk telur yang saling menempel.
     """
     mask = create_egg_mask(image_rgb)
 
@@ -129,7 +129,7 @@ def draw_detection(image_rgb, centers):
     output = image_rgb.copy()
 
     for idx, (x, y, score) in enumerate(centers, start=1):
-        cv2.circle(output, (x, y), 12, (0, 255, 0), 2)
+        cv2.circle(output, (x, y), 11, (0, 255, 0), 2)
 
         cv2.putText(
             output,
@@ -158,7 +158,7 @@ with st.sidebar:
         "Threshold Deteksi",
         min_value=0.15,
         max_value=0.80,
-        value=0.30,
+        value=0.27,
         step=0.01
     )
 
@@ -180,15 +180,16 @@ with st.sidebar:
 
     peak_window = st.slider(
         "Jarak Minimum Antar Telur",
-        min_value=15,
+        min_value=11,
         max_value=45,
-        value=23,
+        value=17,
         step=2
     )
 
     st.info(
-        "Untuk gambar contoh, gunakan nilai default: "
-        "Threshold 0.30, Template 22 x 18, dan Jarak Minimum 23."
+        "Untuk gambar contoh, gunakan Threshold 0.27, "
+        "Template 22 x 18, dan Jarak Minimum 17. "
+        "Jika hasil kurang, turunkan Threshold atau Jarak Minimum."
     )
 
 
