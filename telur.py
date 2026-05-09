@@ -10,131 +10,102 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🥚 Deteksi dan Penghitung Jumlah Telur")
+st.title("🥚 Deteksi Jumlah Telur")
 st.write(
-    "Upload gambar telur, lalu sistem akan mendeteksi jumlah telur "
-    "menggunakan HSV color masking dan template matching."
+    "Aplikasi ini mendeteksi telur menggunakan algoritma Hough Circle "
+    "yang lebih mudah dan cocok untuk bentuk telur yang bulat/oval."
 )
 
 
 def create_egg_mask(image_rgb):
     """
-    Membuat mask warna telur.
-    Cocok untuk telur coklat/oranye seperti gambar contoh.
+    Membuat mask warna telur agar area selain telur bisa diabaikan.
     """
     image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
     hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
 
-    # Rentang warna telur coklat/oranye
-    lower_egg = np.array([0, 30, 50])
+    # Warna telur coklat / oranye
+    lower_egg = np.array([0, 25, 50])
     upper_egg = np.array([35, 255, 255])
 
     mask = cv2.inRange(hsv, lower_egg, upper_egg)
 
     kernel = np.ones((3, 3), np.uint8)
-
-    # Membersihkan noise kecil
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-
-    # Menutup lubang kecil pada area telur
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
     return mask
 
 
-def create_egg_template(width=22, height=18):
-    """
-    Membuat template oval sederhana seperti bentuk telur.
-    """
-    template = np.zeros((height, width), dtype=np.float32)
-
-    center = (width // 2, height // 2)
-    axes = (width // 2 - 2, height // 2 - 2)
-
-    cv2.ellipse(
-        template,
-        center,
-        axes,
-        0,
-        0,
-        360,
-        1,
-        -1
-    )
-
-    template = cv2.GaussianBlur(template, (0, 0), 2)
-
-    return template
-
-
-def detect_eggs_template(
+def detect_eggs_hough(
     image_rgb,
-    threshold=0.27,
-    template_width=22,
-    template_height=18,
-    peak_window=17
+    dp=1.2,
+    min_dist=22,
+    param1=60,
+    param2=20,
+    min_radius=6,
+    max_radius=20
 ):
     """
-    Mendeteksi telur menggunakan template matching.
+    Deteksi telur menggunakan Hough Circle.
     Cocok untuk telur yang saling menempel.
     """
+    image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+
     mask = create_egg_mask(image_rgb)
 
-    egg_map = cv2.GaussianBlur(mask, (0, 0), 3)
-    egg_map = egg_map.astype(np.float32) / 255.0
+    # Blur agar deteksi lingkaran lebih stabil
+    gray_blur = cv2.GaussianBlur(gray, (5, 5), 1)
 
-    template = create_egg_template(
-        width=template_width,
-        height=template_height
+    circles = cv2.HoughCircles(
+        gray_blur,
+        cv2.HOUGH_GRADIENT,
+        dp=dp,
+        minDist=min_dist,
+        param1=param1,
+        param2=param2,
+        minRadius=min_radius,
+        maxRadius=max_radius
     )
 
-    result = cv2.matchTemplate(
-        egg_map,
-        template,
-        cv2.TM_CCOEFF_NORMED
-    )
+    detected = []
 
-    # Mencari titik puncak lokal
-    peak_kernel = np.ones((peak_window, peak_window), dtype=np.float32)
-    local_max = cv2.dilate(result, peak_kernel)
+    if circles is not None:
+        circles = np.round(circles[0, :]).astype("int")
 
-    peaks = ((result == local_max) & (result >= threshold)).astype(np.uint8)
+        for x, y, r in circles:
+            h, w = mask.shape
 
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(peaks)
+            if x < 0 or y < 0 or x >= w or y >= h:
+                continue
 
-    centers = []
+            # Filter: pusat lingkaran harus berada di area warna telur
+            area = mask[
+                max(0, y - 3):min(h, y + 4),
+                max(0, x - 3):min(w, x + 4)
+            ]
 
-    for label_id in range(1, num_labels):
-        ys, xs = np.where(labels == label_id)
+            if cv2.countNonZero(area) > 5:
+                detected.append((x, y, r))
 
-        if len(xs) == 0:
-            continue
-
-        scores = result[ys, xs]
-        best_idx = np.argmax(scores)
-
-        x = int(xs[best_idx] + template_width / 2)
-        y = int(ys[best_idx] + template_height / 2)
-        score = float(scores[best_idx])
-
-        centers.append((x, y, score))
-
-    return centers, mask, result
+    return detected, mask
 
 
-def draw_detection(image_rgb, centers):
+def draw_result(image_rgb, circles):
     """
-    Menggambar lingkaran dan nomor pada telur yang terdeteksi.
+    Menggambar hasil deteksi.
     """
     output = image_rgb.copy()
 
-    for idx, (x, y, score) in enumerate(centers, start=1):
-        cv2.circle(output, (x, y), 11, (0, 255, 0), 2)
+    for i, (x, y, r) in enumerate(circles, start=1):
+        cv2.circle(output, (x, y), r, (0, 255, 0), 2)
+        cv2.circle(output, (x, y), 2, (255, 0, 0), 3)
 
         cv2.putText(
             output,
-            str(idx),
-            (x - 8, y + 5),
+            str(i),
+            (x - 7, y + 5),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45,
             (255, 0, 0),
@@ -154,42 +125,57 @@ uploaded_file = st.file_uploader(
 with st.sidebar:
     st.header("⚙️ Pengaturan Deteksi")
 
-    threshold = st.slider(
-        "Threshold Deteksi",
-        min_value=0.15,
-        max_value=0.80,
-        value=0.27,
-        step=0.01
+    dp = st.slider(
+        "Resolusi Deteksi",
+        min_value=1.0,
+        max_value=2.0,
+        value=1.2,
+        step=0.1
     )
 
-    template_width = st.slider(
-        "Lebar Template Telur",
-        min_value=18,
+    min_dist = st.slider(
+        "Jarak Minimum Antar Telur",
+        min_value=10,
         max_value=40,
         value=22,
         step=1
     )
 
-    template_height = st.slider(
-        "Tinggi Template Telur",
-        min_value=16,
-        max_value=36,
-        value=18,
+    param1 = st.slider(
+        "Deteksi Tepi",
+        min_value=30,
+        max_value=150,
+        value=60,
+        step=5
+    )
+
+    param2 = st.slider(
+        "Sensitivitas Lingkaran",
+        min_value=5,
+        max_value=50,
+        value=20,
         step=1
     )
 
-    peak_window = st.slider(
-        "Jarak Minimum Antar Telur",
-        min_value=11,
-        max_value=45,
-        value=17,
-        step=2
+    min_radius = st.slider(
+        "Radius Minimum Telur",
+        min_value=3,
+        max_value=20,
+        value=6,
+        step=1
+    )
+
+    max_radius = st.slider(
+        "Radius Maksimum Telur",
+        min_value=10,
+        max_value=40,
+        value=20,
+        step=1
     )
 
     st.info(
-        "Untuk gambar contoh, gunakan Threshold 0.27, "
-        "Template 22 x 18, dan Jarak Minimum 17. "
-        "Jika hasil kurang, turunkan Threshold atau Jarak Minimum."
+        "Untuk gambar contoh telur, nilai default biasanya mendeteksi "
+        "sekitar 30 telur."
     )
 
 
@@ -197,15 +183,17 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file).convert("RGB")
     image_rgb = np.array(image)
 
-    centers, mask, result = detect_eggs_template(
+    circles, mask = detect_eggs_hough(
         image_rgb=image_rgb,
-        threshold=threshold,
-        template_width=template_width,
-        template_height=template_height,
-        peak_window=peak_window
+        dp=dp,
+        min_dist=min_dist,
+        param1=param1,
+        param2=param2,
+        min_radius=min_radius,
+        max_radius=max_radius
     )
 
-    output = draw_detection(image_rgb, centers)
+    output = draw_result(image_rgb, circles)
 
     col1, col2 = st.columns(2)
 
@@ -217,25 +205,21 @@ if uploaded_file is not None:
         st.subheader("Hasil Deteksi")
         st.image(output, use_container_width=True)
 
-    st.success(f"Jumlah telur terdeteksi: {len(centers)}")
+    st.success(f"Jumlah telur terdeteksi: {len(circles)}")
 
     with st.expander("Lihat Mask Warna Telur"):
-        st.image(
-            mask,
-            caption="Mask area warna telur",
-            use_container_width=True
-        )
+        st.image(mask, caption="Area warna telur", use_container_width=True)
 
-    with st.expander("Data Titik Deteksi"):
+    with st.expander("Data Deteksi"):
         data = []
 
-        for i, (x, y, score) in enumerate(centers, start=1):
+        for i, (x, y, r) in enumerate(circles, start=1):
             data.append(
                 {
                     "No": i,
                     "X": x,
                     "Y": y,
-                    "Score": round(score, 3)
+                    "Radius": r
                 }
             )
 
