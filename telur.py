@@ -10,22 +10,18 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🥚 Deteksi dan Penghitung Jumlah Telur")
+st.title("🥚 Deteksi Jumlah Telur")
 st.write(
-    "Upload gambar telur. Sistem akan menghitung jumlah telur "
-    "menggunakan Hough Circle Detection dengan filter warna telur."
+    "Upload gambar telur. Sistem akan mendeteksi telur menggunakan "
+    "Hough Circle Detection dengan filter warna telur."
 )
 
 
 def create_egg_mask(image_rgb):
-    """
-    Membuat mask warna telur coklat/oranye.
-    Mask ini dipakai agar deteksi tidak menghitung background putih.
-    """
     image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
     hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
 
-    lower_egg = np.array([0, 25, 50])
+    lower_egg = np.array([0, 20, 50])
     upper_egg = np.array([35, 255, 255])
 
     mask = cv2.inRange(hsv, lower_egg, upper_egg)
@@ -37,46 +33,15 @@ def create_egg_mask(image_rgb):
     return mask
 
 
-def remove_duplicate_circles(circles, min_distance=12):
-    """
-    Menghapus deteksi ganda pada telur yang sama.
-    """
-    if len(circles) == 0:
-        return []
-
-    circles = sorted(circles, key=lambda c: c[2], reverse=True)
-    final_circles = []
-
-    for circle in circles:
-        x, y, r = circle
-        duplicate = False
-
-        for fx, fy, fr in final_circles:
-            distance = np.sqrt((x - fx) ** 2 + (y - fy) ** 2)
-
-            if distance < min_distance:
-                duplicate = True
-                break
-
-        if not duplicate:
-            final_circles.append(circle)
-
-    return final_circles
-
-
 def detect_eggs_hough(
     image_rgb,
     dp=1.2,
-    min_dist=19,
+    min_dist=14,
     param1=50,
-    param2=15,
-    min_radius=6,
-    max_radius=14
+    param2=22,
+    min_radius=8,
+    max_radius=18
 ):
-    """
-    Deteksi telur menggunakan Hough Circle.
-    Setting default dibuat agar gambar telur.png dari repo terbaca 58 telur.
-    """
     image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
 
     mask = create_egg_mask(image_rgb)
@@ -99,47 +64,26 @@ def detect_eggs_hough(
 
     if circles is not None:
         circles = np.round(circles[0, :]).astype("int")
-
         h, w = mask.shape
 
         for x, y, r in circles:
             if x < 0 or y < 0 or x >= w or y >= h:
                 continue
 
-            roi = mask[
-                max(0, y - r):min(h, y + r),
-                max(0, x - r):min(w, x + r)
-            ]
-
-            if roi.size == 0:
-                continue
-
-            egg_pixels = cv2.countNonZero(roi)
-            roi_area = roi.shape[0] * roi.shape[1]
-            egg_ratio = egg_pixels / roi_area
-
-            # Pusat lingkaran harus berada pada area warna telur
             center_area = mask[
-                max(0, y - 2):min(h, y + 3),
-                max(0, x - 2):min(w, x + 3)
+                max(0, y - 3):min(h, y + 4),
+                max(0, x - 3):min(w, x + 4)
             ]
 
-            center_valid = cv2.countNonZero(center_area) > 3
-
-            if center_valid and egg_ratio > 0.25:
+            if cv2.countNonZero(center_area) > 5:
                 detected.append((x, y, r))
 
-    detected = remove_duplicate_circles(detected, min_distance=12)
-
-    detected = sorted(detected, key=lambda c: (c[1], c[0]))
+    detected = sorted(detected, key=lambda item: (item[1], item[0]))
 
     return detected, mask
 
 
 def draw_result(image_rgb, circles):
-    """
-    Menggambar hasil deteksi pada gambar.
-    """
     output = image_rgb.copy()
 
     for i, (x, y, r) in enumerate(circles, start=1):
@@ -151,7 +95,7 @@ def draw_result(image_rgb, circles):
             str(i),
             (x - 7, y + 5),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.42,
+            0.45,
             (255, 0, 0),
             2,
             cv2.LINE_AA
@@ -169,6 +113,10 @@ uploaded_file = st.file_uploader(
 with st.sidebar:
     st.header("⚙️ Pengaturan Deteksi")
 
+    st.info(
+        "Preset ini disesuaikan untuk gambar telur2.png dengan target 30 telur."
+    )
+
     dp = st.slider(
         "Resolusi Deteksi",
         min_value=1.0,
@@ -179,9 +127,9 @@ with st.sidebar:
 
     min_dist = st.slider(
         "Jarak Minimum Antar Telur",
-        min_value=10,
-        max_value=35,
-        value=19,
+        min_value=8,
+        max_value=40,
+        value=14,
         step=1
     )
 
@@ -196,31 +144,25 @@ with st.sidebar:
     param2 = st.slider(
         "Sensitivitas Lingkaran",
         min_value=5,
-        max_value=40,
-        value=15,
+        max_value=50,
+        value=22,
         step=1
     )
 
     min_radius = st.slider(
         "Radius Minimum Telur",
         min_value=3,
-        max_value=20,
-        value=6,
+        max_value=30,
+        value=8,
         step=1
     )
 
     max_radius = st.slider(
         "Radius Maksimum Telur",
         min_value=8,
-        max_value=30,
-        value=14,
+        max_value=40,
+        value=18,
         step=1
-    )
-
-    st.info(
-        "Untuk gambar telur.png dari repo, gunakan default: "
-        "Jarak Minimum 19, Sensitivitas 15, Radius 6 sampai 14. "
-        "Target hasil: 58 telur."
     )
 
 
